@@ -24,7 +24,7 @@ var ValidCategories = map[string]bool{
 // Service defines the business logic interface for geofences.
 type Service interface {
 	Create(ctx context.Context, req models.CreateGeofenceRequest) (*models.CreateGeofenceResponse, error)
-	List(ctx context.Context, category string) ([]models.Geofence, error)
+	List(ctx context.Context, category, limitStr, offsetStr string) ([]models.Geofence, *int64, error)
 }
 
 type service struct {
@@ -134,14 +134,58 @@ func (s *service) Create(ctx context.Context, req models.CreateGeofenceRequest) 
 	}, nil
 }
 
-// List retrieves geofences, optionally filtered by category.
-func (s *service) List(ctx context.Context, category string) ([]models.Geofence, error) {
+// List retrieves geofences, optionally filtered by category and paginated.
+func (s *service) List(ctx context.Context, category, limitStr, offsetStr string) ([]models.Geofence, *int64, error) {
 	trimmedCategory := strings.TrimSpace(category)
 	if trimmedCategory != "" && !ValidCategories[trimmedCategory] {
-		return nil, apperror.NewBadRequestError("invalid category: must be one of: delivery_zone, restricted_zone, toll_zone, customer_area")
+		return nil, nil, apperror.NewBadRequestError("invalid category: must be one of: delivery_zone, restricted_zone, toll_zone, customer_area")
 	}
 
-	return s.store.List(ctx, trimmedCategory)
+	var limitPtr, offsetPtr *int
+	isPaginated := false
+
+	if lStr := strings.TrimSpace(limitStr); lStr != "" {
+		isPaginated = true
+		l, err := strconv.Atoi(lStr)
+		if err != nil || l < 1 {
+			return nil, nil, apperror.NewBadRequestError("limit must be a positive integer greater than 0")
+		}
+		if l > 500 {
+			l = 500
+		}
+		limitPtr = &l
+	}
+
+	if oStr := strings.TrimSpace(offsetStr); oStr != "" {
+		isPaginated = true
+		o, err := strconv.Atoi(oStr)
+		if err != nil || o < 0 {
+			return nil, nil, apperror.NewBadRequestError("offset must be a non-negative integer")
+		}
+		offsetPtr = &o
+	}
+
+	if isPaginated {
+		if limitPtr == nil {
+			defaultLimit := 50
+			limitPtr = &defaultLimit
+		}
+		if offsetPtr == nil {
+			defaultOffset := 0
+			offsetPtr = &defaultOffset
+		}
+	}
+
+	geofences, totalCount, err := s.store.List(ctx, trimmedCategory, limitPtr, offsetPtr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !isPaginated {
+		return geofences, nil, nil
+	}
+
+	return geofences, &totalCount, nil
 }
 
 // buildWKT converts API coordinates [[lat, lng], ...] to WKT POLYGON((lng lat, ...)).

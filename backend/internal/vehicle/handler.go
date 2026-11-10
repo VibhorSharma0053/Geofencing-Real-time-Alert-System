@@ -37,17 +37,28 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, res, start)
 }
 
-// List handles GET /vehicles to retrieve all registered vehicles.
+// List handles GET /vehicles to retrieve all registered vehicles, with optional limit/offset pagination.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
-	vehicles, err := h.service.List(r.Context())
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+
+	vehicles, totalCount, err := h.service.List(r.Context(), limitStr, offsetStr)
 	if err != nil {
 		httpx.WriteAppError(w, err, start)
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, models.ListVehiclesResponse{
-		Vehicles: vehicles,
+	if totalCount == nil {
+		httpx.WriteJSON(w, http.StatusOK, models.ListVehiclesResponse{
+			Vehicles: vehicles,
+		}, start)
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"vehicles":    vehicles,
+		"total_count": *totalCount,
 	}, start)
 }

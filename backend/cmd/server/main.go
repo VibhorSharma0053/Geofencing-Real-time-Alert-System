@@ -17,59 +17,11 @@ import (
 	"github.com/vibhorsharma/geofence-backend/internal/db"
 	"github.com/vibhorsharma/geofence-backend/internal/geofence"
 	"github.com/vibhorsharma/geofence-backend/internal/location"
+	"github.com/vibhorsharma/geofence-backend/internal/middleware"
 	"github.com/vibhorsharma/geofence-backend/internal/vehicle"
 	"github.com/vibhorsharma/geofence-backend/internal/violation"
 	"github.com/vibhorsharma/geofence-backend/internal/ws"
 )
-
-// statusResponseWriter wraps http.ResponseWriter to capture HTTP status codes.
-type statusResponseWriter struct {
-	http.ResponseWriter
-	status int
-}
-
-func (w *statusResponseWriter) WriteHeader(code int) {
-	w.status = code
-	w.ResponseWriter.WriteHeader(code)
-}
-
-// loggingMiddleware logs incoming HTTP requests with method, path, status, and duration.
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		wrapped := &statusResponseWriter{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(wrapped, r)
-		duration := time.Since(start)
-
-		slog.Info("http request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", wrapped.status,
-			"duration_ms", duration.Milliseconds(),
-			"duration", duration.String(),
-		)
-	})
-}
-
-// corsMiddleware attaches basic CORS headers for frontend integration.
-func corsMiddleware(allowedOrigins string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-		}
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
 
 func main() {
 	// Initialize structured JSON logging
@@ -141,8 +93,19 @@ func main() {
 		WSHub:            hub,
 	})
 
-	// Wrap router with CORS and logging middlewares
-	handler := loggingMiddleware(corsMiddleware(cfg.AllowedOrigins, router))
+	// Initialize rate limiter for POST /vehicles/location
+	rateLimiter := middleware.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
+	defer rateLimiter.Close()
+
+	// Build hardened middleware chain:
+	// Recovery -> RequestID -> Logger -> CORS -> Auth -> RateLimit -> Router
+	var handler http.Handler = router
+	handler = rateLimiter.Limit(handler)
+	handler = middleware.Auth(cfg.APIKey, handler)
+	handler = middleware.CORS(cfg.AllowedOriginsList(), handler)
+	handler = middleware.Logger(handler)
+	handler = middleware.RequestID(handler)
+	handler = middleware.Recovery(handler)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),
@@ -155,7 +118,7 @@ func main() {
 	// Graceful shutdown handling
 	serverErrors := make(chan error, 1)
 	go func() {
-		slog.Info("starting server", "port", cfg.Port)
+		slog.Info("starting server", "port", cfg.Port, "auth_enabled", cfg.APIKey != "")
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
 		}
@@ -177,6 +140,9 @@ func main() {
 			slog.Error("graceful server shutdown failed", "error", err)
 			_ = server.Close()
 		}
+		hub.Close()
+		rateLimiter.Close()
+		pool.Close()
 		slog.Info("server stopped gracefully")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -18,7 +19,7 @@ var phoneRegex = regexp.MustCompile(`^[0-9+\s\-()]{7,20}$`)
 // Service defines the business logic interface for vehicles.
 type Service interface {
 	Create(ctx context.Context, req models.CreateVehicleRequest) (*models.CreateVehicleResponse, error)
-	List(ctx context.Context) ([]models.Vehicle, error)
+	List(ctx context.Context, limitStr, offsetStr string) ([]models.Vehicle, *int64, error)
 	GetByID(ctx context.Context, id string) (*models.Vehicle, error)
 }
 
@@ -88,9 +89,53 @@ func (s *service) Create(ctx context.Context, req models.CreateVehicleRequest) (
 	}, nil
 }
 
-// List retrieves all vehicles.
-func (s *service) List(ctx context.Context) ([]models.Vehicle, error) {
-	return s.store.List(ctx)
+// List retrieves all vehicles with optional limit/offset pagination.
+func (s *service) List(ctx context.Context, limitStr, offsetStr string) ([]models.Vehicle, *int64, error) {
+	var limitPtr, offsetPtr *int
+	isPaginated := false
+
+	if lStr := strings.TrimSpace(limitStr); lStr != "" {
+		isPaginated = true
+		l, err := strconv.Atoi(lStr)
+		if err != nil || l < 1 {
+			return nil, nil, apperror.NewBadRequestError("limit must be a positive integer greater than 0")
+		}
+		if l > 500 {
+			l = 500
+		}
+		limitPtr = &l
+	}
+
+	if oStr := strings.TrimSpace(offsetStr); oStr != "" {
+		isPaginated = true
+		o, err := strconv.Atoi(oStr)
+		if err != nil || o < 0 {
+			return nil, nil, apperror.NewBadRequestError("offset must be a non-negative integer")
+		}
+		offsetPtr = &o
+	}
+
+	if isPaginated {
+		if limitPtr == nil {
+			defaultLimit := 50
+			limitPtr = &defaultLimit
+		}
+		if offsetPtr == nil {
+			defaultOffset := 0
+			offsetPtr = &defaultOffset
+		}
+	}
+
+	vehicles, totalCount, err := s.store.List(ctx, limitPtr, offsetPtr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !isPaginated {
+		return vehicles, nil, nil
+	}
+
+	return vehicles, &totalCount, nil
 }
 
 // GetByID retrieves a vehicle by ID.

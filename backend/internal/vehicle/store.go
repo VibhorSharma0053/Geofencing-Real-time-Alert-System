@@ -15,7 +15,7 @@ import (
 // Store defines the database persistence interface for vehicles.
 type Store interface {
 	Create(ctx context.Context, v *models.Vehicle) error
-	List(ctx context.Context) ([]models.Vehicle, error)
+	List(ctx context.Context, limit, offset *int) ([]models.Vehicle, int64, error)
 	GetByID(ctx context.Context, id string) (*models.Vehicle, error)
 }
 
@@ -53,16 +53,24 @@ func (s *pgStore) Create(ctx context.Context, v *models.Vehicle) error {
 	return nil
 }
 
-// List returns all vehicles ordered by created_at DESC.
-func (s *pgStore) List(ctx context.Context) ([]models.Vehicle, error) {
-	query := `
-		SELECT id, vehicle_number, driver_name, vehicle_type, phone, status, created_at
-		FROM vehicles
-		ORDER BY created_at DESC;
-	`
-	rows, err := s.pool.Query(ctx, query)
+// List returns all vehicles ordered by created_at DESC with optional pagination.
+func (s *pgStore) List(ctx context.Context, limit, offset *int) ([]models.Vehicle, int64, error) {
+	var totalCount int64
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM vehicles;").Scan(&totalCount); err != nil {
+		return nil, 0, fmt.Errorf("failed to count vehicles: %w", err)
+	}
+
+	query := "SELECT id, vehicle_number, driver_name, vehicle_type, phone, status, created_at FROM vehicles ORDER BY created_at DESC"
+	var args []any
+	if limit != nil && offset != nil {
+		query += " LIMIT $1 OFFSET $2"
+		args = append(args, *limit, *offset)
+	}
+	query += ";"
+
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query vehicles: %w", err)
+		return nil, 0, fmt.Errorf("failed to query vehicles: %w", err)
 	}
 	defer rows.Close()
 
@@ -70,16 +78,17 @@ func (s *pgStore) List(ctx context.Context) ([]models.Vehicle, error) {
 	for rows.Next() {
 		var v models.Vehicle
 		if err := rows.Scan(&v.ID, &v.VehicleNumber, &v.DriverName, &v.VehicleType, &v.Phone, &v.Status, &v.CreatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan vehicle row: %w", err)
+			return nil, 0, fmt.Errorf("failed to scan vehicle row: %w", err)
 		}
+		v.CreatedAt = v.CreatedAt.UTC()
 		vehicles = append(vehicles, v)
 	}
 
 	if err := rows.Err(); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
+		return nil, 0, fmt.Errorf("rows iteration error: %w", err)
 	}
 
-	return vehicles, nil
+	return vehicles, totalCount, nil
 }
 
 // GetByID retrieves a single vehicle by its ID.

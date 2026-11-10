@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -10,6 +11,9 @@ type Config struct {
 	Port           string
 	DatabaseURL    string
 	AllowedOrigins string
+	RateLimitRPS   float64
+	RateLimitBurst int
+	APIKey         string
 }
 
 // Load loads configuration from environment variables with sensible defaults.
@@ -26,19 +30,38 @@ func Load() *Config {
 
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
-		allowedOrigins = "http://localhost:5173,http://localhost:3000"
+		allowedOrigins = "*"
 	}
+
+	rps := 50.0
+	if rpsStr := os.Getenv("RATE_LIMIT_RPS"); rpsStr != "" {
+		if parsedRPS, err := strconv.ParseFloat(rpsStr, 64); err == nil && parsedRPS > 0 {
+			rps = parsedRPS
+		}
+	}
+
+	burst := 100
+	if burstStr := os.Getenv("RATE_LIMIT_BURST"); burstStr != "" {
+		if parsedBurst, err := strconv.Atoi(burstStr); err == nil && parsedBurst > 0 {
+			burst = parsedBurst
+		}
+	}
+
+	apiKey := strings.TrimSpace(os.Getenv("API_KEY"))
 
 	return &Config{
 		Port:           port,
 		DatabaseURL:    dbURL,
 		AllowedOrigins: allowedOrigins,
+		RateLimitRPS:   rps,
+		RateLimitBurst: burst,
+		APIKey:         apiKey,
 	}
 }
 
 // AllowedOriginsList returns the allowed origins split into a string slice.
 func (c *Config) AllowedOriginsList() []string {
-	if c.AllowedOrigins == "" {
+	if c.AllowedOrigins == "" || c.AllowedOrigins == "*" {
 		return []string{"*"}
 	}
 	parts := strings.Split(c.AllowedOrigins, ",")

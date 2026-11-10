@@ -26,8 +26,8 @@ func (m *mockStore) Create(ctx context.Context, g *models.Geofence, wkt string) 
 	return m.createErr
 }
 
-func (m *mockStore) List(ctx context.Context, category string) ([]models.Geofence, error) {
-	return m.listResult, m.listErr
+func (m *mockStore) List(ctx context.Context, category string, limit, offset *int) ([]models.Geofence, int64, error) {
+	return m.listResult, int64(len(m.listResult)), m.listErr
 }
 
 func TestServiceCreateValidation(t *testing.T) {
@@ -200,3 +200,41 @@ func TestBuildWKT(t *testing.T) {
 		t.Errorf("wkt mismatch.\nGot:  %s\nWant: %s", wkt, expectedPrefix)
 	}
 }
+
+func TestServiceListPagination(t *testing.T) {
+	store := &mockStore{
+		listResult: []models.Geofence{
+			{ID: "geo_1", Name: "Zone 1"},
+			{ID: "geo_2", Name: "Zone 2"},
+		},
+	}
+	svc := NewService(store)
+	ctx := context.Background()
+
+	t.Run("without pagination returns nil totalCount", func(t *testing.T) {
+		res, totalCount, err := svc.List(ctx, "", "", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 2 {
+			t.Errorf("expected 2 geofences, got %d", len(res))
+		}
+		if totalCount != nil {
+			t.Errorf("expected totalCount to be nil when pagination omitted, got %v", *totalCount)
+		}
+	})
+
+	t.Run("with limit returns non-nil totalCount", func(t *testing.T) {
+		res, totalCount, err := svc.List(ctx, "", "10", "0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 2 {
+			t.Errorf("expected 2 geofences, got %d", len(res))
+		}
+		if totalCount == nil || *totalCount != 2 {
+			t.Errorf("expected totalCount 2, got %v", totalCount)
+		}
+	})
+}
+

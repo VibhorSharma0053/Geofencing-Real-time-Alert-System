@@ -21,8 +21,8 @@ func (m *mockStore) Create(ctx context.Context, v *models.Vehicle) error {
 	return m.createErr
 }
 
-func (m *mockStore) List(ctx context.Context) ([]models.Vehicle, error) {
-	return m.listResult, m.listErr
+func (m *mockStore) List(ctx context.Context, limit, offset *int) ([]models.Vehicle, int64, error) {
+	return m.listResult, int64(len(m.listResult)), m.listErr
 }
 
 func (m *mockStore) GetByID(ctx context.Context, id string) (*models.Vehicle, error) {
@@ -136,6 +136,43 @@ func TestVehicleCreateValidation(t *testing.T) {
 		}
 		if !strings.Contains(conflictErr.Message, "vehicle_number already exists") {
 			t.Errorf("unexpected error message: %s", conflictErr.Message)
+		}
+	})
+}
+
+func TestVehicleListPagination(t *testing.T) {
+	store := &mockStore{
+		listResult: []models.Vehicle{
+			{ID: "veh_1", VehicleNumber: "KA-01-1111"},
+			{ID: "veh_2", VehicleNumber: "KA-01-2222"},
+		},
+	}
+	svc := NewService(store)
+	ctx := context.Background()
+
+	t.Run("omitted pagination returns nil totalCount", func(t *testing.T) {
+		res, totalCount, err := svc.List(ctx, "", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 2 {
+			t.Errorf("expected 2 vehicles, got %d", len(res))
+		}
+		if totalCount != nil {
+			t.Errorf("expected totalCount nil, got %v", totalCount)
+		}
+	})
+
+	t.Run("with limit returns totalCount", func(t *testing.T) {
+		res, totalCount, err := svc.List(ctx, "10", "0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 2 {
+			t.Errorf("expected 2 vehicles, got %d", len(res))
+		}
+		if totalCount == nil || *totalCount != 2 {
+			t.Errorf("expected totalCount 2, got %v", totalCount)
 		}
 	})
 }

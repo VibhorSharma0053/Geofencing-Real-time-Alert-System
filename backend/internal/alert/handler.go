@@ -37,21 +37,31 @@ func (h *Handler) Configure(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, res, start)
 }
 
-// List handles GET /alerts to retrieve alert rules with optional geofence or vehicle filters.
+// List handles GET /alerts with optional filters and optional limit/offset pagination.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
 	geofenceID := r.URL.Query().Get("geofence_id")
 	vehicleID := r.URL.Query().Get("vehicle_id")
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
 
-	rules, err := h.service.ListRules(r.Context(), geofenceID, vehicleID)
+	rules, totalCount, err := h.service.ListRules(r.Context(), geofenceID, vehicleID, limitStr, offsetStr)
 	if err != nil {
 		httpx.WriteAppError(w, err, start)
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, models.ListAlertsResponse{
-		Alerts: rules,
+	if totalCount == nil {
+		httpx.WriteJSON(w, http.StatusOK, models.ListAlertsResponse{
+			Alerts: rules,
+		}, start)
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"alerts":      rules,
+		"total_count": *totalCount,
 	}, start)
 }
 

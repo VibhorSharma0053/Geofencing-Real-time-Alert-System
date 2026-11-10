@@ -37,19 +37,29 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, res, start)
 }
 
-// List handles GET /geofences to query geofences with an optional category filter.
+// List handles GET /geofences with optional category filter and optional limit/offset pagination.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
 	category := r.URL.Query().Get("category")
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
 
-	geofences, err := h.service.List(r.Context(), category)
+	geofences, totalCount, err := h.service.List(r.Context(), category, limitStr, offsetStr)
 	if err != nil {
 		httpx.WriteAppError(w, err, start)
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, models.ListGeofencesResponse{
-		Geofences: geofences,
+	if totalCount == nil {
+		httpx.WriteJSON(w, http.StatusOK, models.ListGeofencesResponse{
+			Geofences: geofences,
+		}, start)
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"geofences":   geofences,
+		"total_count": *totalCount,
 	}, start)
 }

@@ -15,7 +15,7 @@ import (
 type Store interface {
 	ValidateGeometry(ctx context.Context, wkt string) (bool, error)
 	Create(ctx context.Context, g *models.Geofence, wkt string) error
-	List(ctx context.Context, category string) ([]models.Geofence, error)
+	List(ctx context.Context, category string, limit, offset *int) ([]models.Geofence, int64, error)
 }
 
 type pgStore struct {
@@ -39,7 +39,6 @@ func (s *pgStore) ValidateGeometry(ctx context.Context, wkt string) (bool, error
 	var isValid bool
 	err := s.pool.QueryRow(ctx, query, wkt).Scan(&isValid)
 	if err != nil {
-		// PostGIS query errors on invalid geometries (e.g. self-intersection during geom parsing)
 		return false, nil
 	}
 	return isValid, nil
@@ -72,30 +71,38 @@ func (s *pgStore) Create(ctx context.Context, g *models.Geofence, wkt string) er
 	return nil
 }
 
-// List returns geofences ordered by created_at DESC, optionally filtered by category.
-func (s *pgStore) List(ctx context.Context, category string) ([]models.Geofence, error) {
+// List returns geofences ordered by created_at DESC, with optional category filter and pagination.
+func (s *pgStore) List(ctx context.Context, category string, limit, offset *int) ([]models.Geofence, int64, error) {
+	var countQuery string
 	var query string
 	var args []any
+	argIdx := 1
 
 	if category != "" {
-		query = `
-			SELECT id, name, description, category, coordinates, status, created_at
-			FROM geofences
-			WHERE category = $1
-			ORDER BY created_at DESC;
-		`
+		countQuery = "SELECT COUNT(*) FROM geofences WHERE category = $1;"
+		query = "SELECT id, name, description, category, coordinates, status, created_at FROM geofences WHERE category = $1 ORDER BY created_at DESC"
 		args = append(args, category)
+		argIdx++
 	} else {
-		query = `
-			SELECT id, name, description, category, coordinates, status, created_at
-			FROM geofences
-			ORDER BY created_at DESC;
-		`
+		countQuery = "SELECT COUNT(*) FROM geofences;"
+		query = "SELECT id, name, description, category, coordinates, status, created_at FROM geofences ORDER BY created_at DESC"
 	}
 
-	rows, err := s.pool.Query(ctx, query, args...)
+	var totalCount int64
+	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, fmt.Errorf("failed to count geofences: %w", err)
+	}
+
+	dataArgs := append([]any(nil), args...)
+	if limit != nil && offset != nil {
+		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+		dataArgs = append(dataArgs, *limit, *offset)
+	}
+	query += ";"
+
+	rows, err := s.pool.Query(ctx, query, dataArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query geofences: %w", err)
+		return nil, 0, fmt.Errorf("failed to query geofences: %w", err)
 	}
 	defer rows.Close()
 
@@ -105,19 +112,19 @@ func (s *pgStore) List(ctx context.Context, category string) ([]models.Geofence,
 		var coordsRaw []byte
 
 		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.Category, &coordsRaw, &g.Status, &g.CreatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan geofence row: %w", err)
+			return nil, 0, fmt.Errorf("failed to scan geofence row: %w", err)
 		}
 
 		if err := json.Unmarshal(coordsRaw, &g.Coordinates); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal coordinates for geofence %s: %w", g.ID, err)
+			return nil, 0, fmt.Errorf("failed to unmarshal coordinates for geofence %s: %w", g.ID, err)
 		}
-
+		g.CreatedAt = g.CreatedAt.UTC()
 		geofences = append(geofences, g)
 	}
 
 	if err := rows.Err(); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
+		return nil, 0, fmt.Errorf("rows iteration error: %w", err)
 	}
 
-	return geofences, nil
+	return geofences, totalCount, nil
 }

@@ -92,8 +92,8 @@ func (m *mockAlertStore) CreateRule(ctx context.Context, rule *models.AlertRule)
 	return nil
 }
 
-func (m *mockAlertStore) ListRules(ctx context.Context, geofenceID, vehicleID string) ([]models.AlertRuleDetail, error) {
-	return nil, nil
+func (m *mockAlertStore) ListRules(ctx context.Context, geofenceID, vehicleID string, limit, offset *int) ([]models.AlertRuleDetail, int64, error) {
+	return nil, 0, nil
 }
 
 func (m *mockAlertStore) DeleteRule(ctx context.Context, alertID string) error {

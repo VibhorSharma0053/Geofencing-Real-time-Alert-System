@@ -2,6 +2,7 @@ package alert
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ var ValidEventTypes = map[string]bool{
 // Service defines the business logic interface for alert rules.
 type Service interface {
 	CreateRule(ctx context.Context, req models.ConfigureAlertRequest) (*models.ConfigureAlertResponse, error)
-	ListRules(ctx context.Context, geofenceID, vehicleID string) ([]models.AlertRuleDetail, error)
+	ListRules(ctx context.Context, geofenceID, vehicleID, limitStr, offsetStr string) ([]models.AlertRuleDetail, *int64, error)
 	DeleteRule(ctx context.Context, alertID string) error
 }
 
@@ -76,16 +77,53 @@ func (s *service) CreateRule(ctx context.Context, req models.ConfigureAlertReque
 	}, nil
 }
 
-// ListRules retrieves alert rules, optionally filtered by geofence or vehicle.
-func (s *service) ListRules(ctx context.Context, geofenceID, vehicleID string) ([]models.AlertRuleDetail, error) {
-	rules, err := s.store.ListRules(ctx, strings.TrimSpace(geofenceID), strings.TrimSpace(vehicleID))
+// ListRules retrieves alert rules, optionally filtered by geofence or vehicle and paginated.
+func (s *service) ListRules(ctx context.Context, geofenceID, vehicleID, limitStr, offsetStr string) ([]models.AlertRuleDetail, *int64, error) {
+	var limitPtr, offsetPtr *int
+	isPaginated := false
+
+	if lStr := strings.TrimSpace(limitStr); lStr != "" {
+		isPaginated = true
+		l, err := strconv.Atoi(lStr)
+		if err != nil || l < 1 {
+			return nil, nil, apperror.NewBadRequestError("limit must be a positive integer greater than 0")
+		}
+		if l > 500 {
+			l = 500
+		}
+		limitPtr = &l
+	}
+
+	if oStr := strings.TrimSpace(offsetStr); oStr != "" {
+		isPaginated = true
+		o, err := strconv.Atoi(oStr)
+		if err != nil || o < 0 {
+			return nil, nil, apperror.NewBadRequestError("offset must be a non-negative integer")
+		}
+		offsetPtr = &o
+	}
+
+	if isPaginated {
+		if limitPtr == nil {
+			defaultLimit := 50
+			limitPtr = &defaultLimit
+		}
+		if offsetPtr == nil {
+			defaultOffset := 0
+			offsetPtr = &defaultOffset
+		}
+	}
+
+	rules, totalCount, err := s.store.ListRules(ctx, strings.TrimSpace(geofenceID), strings.TrimSpace(vehicleID), limitPtr, offsetPtr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if rules == nil {
-		rules = make([]models.AlertRuleDetail, 0)
+
+	if !isPaginated {
+		return rules, nil, nil
 	}
-	return rules, nil
+
+	return rules, &totalCount, nil
 }
 
 // DeleteRule removes an alert rule by ID.

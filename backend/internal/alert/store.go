@@ -17,7 +17,7 @@ import (
 // Store defines persistence operations for alert rules and alert events.
 type Store interface {
 	CreateRule(ctx context.Context, rule *models.AlertRule) error
-	ListRules(ctx context.Context, geofenceID, vehicleID string) ([]models.AlertRuleDetail, error)
+	ListRules(ctx context.Context, geofenceID, vehicleID string, limit, offset *int) ([]models.AlertRuleDetail, int64, error)
 	DeleteRule(ctx context.Context, alertID string) error
 	FindMatchingRules(ctx context.Context, geofenceID, vehicleID, eventType string) ([]string, error)
 	RecordAlertEvent(ctx context.Context, eventID, violationID string, ruleIDs []string, payload any) error
@@ -79,8 +79,8 @@ func (s *pgStore) CreateRule(ctx context.Context, rule *models.AlertRule) error 
 	return nil
 }
 
-// ListRules queries active and inactive alert rules with joined geofence and vehicle details.
-func (s *pgStore) ListRules(ctx context.Context, geofenceID, vehicleID string) ([]models.AlertRuleDetail, error) {
+// ListRules queries active and inactive alert rules with optional filtering and pagination.
+func (s *pgStore) ListRules(ctx context.Context, geofenceID, vehicleID string, limit, offset *int) ([]models.AlertRuleDetail, int64, error) {
 	var conditions []string
 	var args []any
 	argIdx := 1
@@ -102,6 +102,12 @@ func (s *pgStore) ListRules(ctx context.Context, geofenceID, vehicleID string) (
 		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
+	countQuery := "SELECT COUNT(*) FROM alert_rules r" + whereClause + ";"
+	var totalCount int64
+	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, fmt.Errorf("failed to count alert rules: %w", err)
+	}
+
 	query := `
 		SELECT 
 			r.id, 
@@ -115,11 +121,18 @@ func (s *pgStore) ListRules(ctx context.Context, geofenceID, vehicleID string) (
 		FROM alert_rules r
 		JOIN geofences g ON r.geofence_id = g.id
 		LEFT JOIN vehicles veh ON r.vehicle_id = veh.id
-	` + whereClause + " ORDER BY r.created_at DESC;"
+	` + whereClause + " ORDER BY r.created_at DESC"
 
-	rows, err := s.pool.Query(ctx, query, args...)
+	dataArgs := append([]any(nil), args...)
+	if limit != nil && offset != nil {
+		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+		dataArgs = append(dataArgs, *limit, *offset)
+	}
+	query += ";"
+
+	rows, err := s.pool.Query(ctx, query, dataArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list alert rules: %w", err)
+		return nil, 0, fmt.Errorf("failed to list alert rules: %w", err)
 	}
 	defer rows.Close()
 
@@ -136,17 +149,17 @@ func (s *pgStore) ListRules(ctx context.Context, geofenceID, vehicleID string) (
 			&d.Status,
 			&d.CreatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("failed to scan alert rule row: %w", err)
+			return nil, 0, fmt.Errorf("failed to scan alert rule row: %w", err)
 		}
 		d.CreatedAt = d.CreatedAt.UTC()
 		rules = append(rules, d)
 	}
 
 	if err := rows.Err(); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("rows iteration error in alert rules: %w", err)
+		return nil, 0, fmt.Errorf("rows iteration error in alert rules: %w", err)
 	}
 
-	return rules, nil
+	return rules, totalCount, nil
 }
 
 // DeleteRule removes an alert rule by ID, returning NotFoundError if it does not exist.
