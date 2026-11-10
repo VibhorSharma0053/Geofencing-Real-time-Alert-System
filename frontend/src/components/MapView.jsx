@@ -15,16 +15,20 @@ import { CategoryBadge } from './CategoryBadge';
 import { Truck, Navigation, MapPin } from 'lucide-react';
 
 // Vehicle custom marker icon generator
-function createVehicleIcon(isSelected = false) {
+function createVehicleIcon(isSelected = false, isRestricted = false) {
   return L.divIcon({
     className: 'custom-vehicle-div-icon',
     html: `
       <div class="relative flex items-center justify-center w-8 h-8 rounded-full transition-transform ${
-        isSelected
+        isRestricted
+          ? 'bg-red-600 ring-4 ring-red-400/60 shadow-lg shadow-red-500/50 scale-110 animate-pulse'
+          : isSelected
           ? 'bg-indigo-600 ring-4 ring-indigo-400/40 scale-110 shadow-indigo-500/50'
           : 'bg-slate-900 border-2 border-indigo-400 shadow-lg hover:scale-105'
       } text-white">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-indigo-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 ${
+          isRestricted ? 'text-white' : 'text-indigo-300'
+        }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
           <path d="M15 18H9"/>
           <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
@@ -152,10 +156,23 @@ function MapFocusHandler({
   fitToData,
   focusGeofenceId,
   focusVehicleId,
+  focusPoint,
 }) {
   const map = useMap();
   const prevFocusGeoRef = useRef(null);
   const prevFocusVehRef = useRef(null);
+  const prevFocusPointRef = useRef(null);
+
+  // Focus specific point (e.g. clicked alert location)
+  useEffect(() => {
+    if (focusPoint && focusPoint.length === 2) {
+      const key = `${focusPoint[0]},${focusPoint[1]}`;
+      if (key !== prevFocusPointRef.current) {
+        map.flyTo(focusPoint, 16, { duration: 1.0 });
+        prevFocusPointRef.current = key;
+      }
+    }
+  }, [focusPoint, map]);
 
   // Focus specific geofence
   useEffect(() => {
@@ -223,6 +240,7 @@ export function MapView({
   fitToData = false,
   focusGeofenceId = null,
   focusVehicleId = null,
+  focusPoint = null,
   center = DEFAULT_MAP_CENTER,
   zoom = DEFAULT_MAP_ZOOM,
   className = 'w-full h-full min-h-[400px]',
@@ -250,6 +268,7 @@ export function MapView({
           fitToData={fitToData}
           focusGeofenceId={focusGeofenceId}
           focusVehicleId={focusVehicleId}
+          focusPoint={focusPoint}
         />
 
         {/* Render Active Geofences */}
@@ -332,12 +351,15 @@ export function MapView({
           }
 
           const isFocused = focusVehicleId === v.vehicle_id;
+          const isRestricted =
+            v.isRestricted ||
+            v.current_geofences?.some((g) => g.category === 'restricted_zone');
 
           return (
             <Marker
               key={v.vehicle_id}
               position={[lat, lon]}
-              icon={createVehicleIcon(isFocused)}
+              icon={createVehicleIcon(isFocused, isRestricted)}
             >
               <Popup className="custom-leaflet-popup">
                 <div className="p-1 min-w-[190px]">
