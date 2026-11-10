@@ -11,9 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/vibhorsharma/geofence-backend/internal/api"
 	"github.com/vibhorsharma/geofence-backend/internal/config"
 	"github.com/vibhorsharma/geofence-backend/internal/db"
-	"github.com/vibhorsharma/geofence-backend/internal/httpx"
+	"github.com/vibhorsharma/geofence-backend/internal/geofence"
+	"github.com/vibhorsharma/geofence-backend/internal/vehicle"
 )
 
 // statusResponseWriter wraps http.ResponseWriter to capture HTTP status codes.
@@ -91,30 +93,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize Go 1.22+ ServeMux
-	mux := http.NewServeMux()
+	// Initialize Geofence layer
+	geofenceStore := geofence.NewStore(pool)
+	geofenceService := geofence.NewService(geofenceStore)
+	geofenceHandler := geofence.NewHandler(geofenceService)
 
-	// GET /health
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		dbStatus := "ok"
+	// Initialize Vehicle layer
+	vehicleStore := vehicle.NewStore(pool)
+	vehicleService := vehicle.NewService(vehicleStore)
+	vehicleHandler := vehicle.NewHandler(vehicleService)
 
-		pingCtx, pingCancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer pingCancel()
-
-		if err := pool.Ping(pingCtx); err != nil {
-			slog.Warn("health check database ping failed", "error", err)
-			dbStatus = "down"
-		}
-
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{
-			"status": "ok",
-			"db":     dbStatus,
-		}, start)
+	// Build router with Go 1.22+ ServeMux patterns
+	router := api.NewRouter(api.RouterConfig{
+		Pool:            pool,
+		GeofenceHandler: geofenceHandler,
+		VehicleHandler:  vehicleHandler,
 	})
 
-	// Wrap handler with logging and CORS middlewares
-	handler := loggingMiddleware(corsMiddleware(cfg.AllowedOrigins, mux))
+	// Wrap router with CORS and logging middlewares
+	handler := loggingMiddleware(corsMiddleware(cfg.AllowedOrigins, router))
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),

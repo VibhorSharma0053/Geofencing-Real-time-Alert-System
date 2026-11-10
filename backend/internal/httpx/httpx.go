@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/vibhorsharma/geofence-backend/internal/apperror"
 )
 
 // MaxRequestBodyBytes limits JSON request bodies to 1MB.
@@ -94,3 +97,31 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 
 	return nil
 }
+
+// WriteAppError inspects standard application errors (validation, conflict, bad request, not found)
+// and maps them directly to the appropriate HTTP status code and JSON structure with time_ns.
+func WriteAppError(w http.ResponseWriter, err error, start time.Time) {
+	var valErr *apperror.ValidationError
+	var conflictErr *apperror.ConflictError
+	var badReqErr *apperror.BadRequestError
+	var notFoundErr *apperror.NotFoundError
+
+	switch {
+	case errors.As(err, &valErr):
+		if len(valErr.Details) > 0 {
+			WriteError(w, http.StatusBadRequest, valErr.Message, start, valErr.Details)
+		} else {
+			WriteError(w, http.StatusBadRequest, valErr.Message, start)
+		}
+	case errors.As(err, &conflictErr):
+		WriteError(w, http.StatusConflict, conflictErr.Message, start)
+	case errors.As(err, &badReqErr):
+		WriteError(w, http.StatusBadRequest, badReqErr.Message, start)
+	case errors.As(err, &notFoundErr):
+		WriteError(w, http.StatusNotFound, notFoundErr.Message, start)
+	default:
+		slog.Error("unhandled internal error", "error", err)
+		WriteError(w, http.StatusInternalServerError, "internal server error", start)
+	}
+}
+

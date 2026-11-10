@@ -128,3 +128,43 @@ type WebSocketLocationPayload struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 }
+
+// CreateGeofenceRequest defines the expected payload for POST /geofences.
+type CreateGeofenceRequest struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Coordinates []Coordinate `json:"coordinates"`
+	Category    string       `json:"category"`
+}
+
+// CreateGeofenceResponse defines the response payload for POST /geofences.
+type CreateGeofenceResponse struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+// ListGeofencesResponse defines the response payload for GET /geofences.
+type ListGeofencesResponse struct {
+	Geofences []Geofence `json:"geofences"`
+}
+
+// CreateVehicleRequest defines the expected payload for POST /vehicles.
+type CreateVehicleRequest struct {
+	VehicleNumber string `json:"vehicle_number"`
+	DriverName    string `json:"driver_name"`
+	VehicleType   string `json:"vehicle_type"`
+	Phone         string `json:"phone"`
+}
+
+// CreateVehicleResponse defines the response payload for POST /vehicles.
+type CreateVehicleResponse struct {
+	ID            string `json:"id"`
+	VehicleNumber string `json:"vehicle_number"`
+	Status        string `json:"status"`
+}
+
+// ListVehiclesResponse defines the response payload for GET /vehicles.
+type ListVehiclesResponse struct {
+	Vehicles []Vehicle `json:"vehicles"`
+}
