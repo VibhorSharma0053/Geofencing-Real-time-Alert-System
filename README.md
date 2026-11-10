@@ -21,8 +21,8 @@ A high-performance full-stack geofencing and real-time fleet monitoring system b
 - [x] **Phase 1: Database Schema & PostGIS Migrations (pgxpool + golang-migrate)**
 - [x] **Phase 2: Domain Models & Storage Layer Implementation**
 - [x] **Phase 3: Core Geofencing Engine & Event Detection Logic**
-- [ ] **Phase 4: REST API Endpoints (Geofences, Vehicles, Locations, Alerts, Violations)**
-- [ ] **Phase 5: WebSocket Real-Time Alert Broadcast Hub**
+- [x] **Phase 4: REST API Endpoints (Geofences, Vehicles, Locations, Alerts, Violations)**
+- [x] **Phase 5: WebSocket Real-Time Alert Broadcast Hub**
 - [ ] **Phase 6: Frontend Setup & Shell Architecture (Vite + React + Tailwind CSS)**
 - [ ] **Phase 7: Interactive Geofence Editor & Map Canvas (Leaflet + Geoman)**
 - [ ] **Phase 8: Real-Time Fleet Tracking & Alert Dashboard**

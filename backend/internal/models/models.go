@@ -218,3 +218,42 @@ type ListViolationsResponse struct {
 	Violations []ViolationEvent `json:"violations"`
 	TotalCount int64            `json:"total_count"`
 }
+
+// ConfigureAlertRequest defines the payload for POST /alerts/configure.
+type ConfigureAlertRequest struct {
+	GeofenceID string  `json:"geofence_id"`
+	VehicleID  *string `json:"vehicle_id,omitempty"`
+	EventType  string  `json:"event_type"`
+}
+
+// ConfigureAlertResponse defines the response payload for POST /alerts/configure.
+type ConfigureAlertResponse struct {
+	AlertID    string  `json:"alert_id"`
+	GeofenceID string  `json:"geofence_id"`
+	VehicleID  *string `json:"vehicle_id"`
+	EventType  string  `json:"event_type"`
+	Status     string  `json:"status"`
+}
+
+// AlertRuleDetail represents an alert rule joined with geofence and vehicle details.
+type AlertRuleDetail struct {
+	AlertID       string    `json:"alert_id"`
+	GeofenceID    string    `json:"geofence_id"`
+	GeofenceName  string    `json:"geofence_name"`
+	VehicleID     *string   `json:"vehicle_id"`
+	VehicleNumber *string   `json:"vehicle_number"`
+	EventType     string    `json:"event_type"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// ListAlertsResponse defines the response payload for GET /alerts.
+type ListAlertsResponse struct {
+	Alerts []AlertRuleDetail `json:"alerts"`
+}
+
+// DeleteAlertResponse defines the response payload for DELETE /alerts/{alert_id}.
+type DeleteAlertResponse struct {
+	Deleted bool   `json:"deleted"`
+	AlertID string `json:"alert_id"`
+}

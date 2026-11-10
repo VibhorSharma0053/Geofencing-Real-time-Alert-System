@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/vibhorsharma/geofence-backend/internal/alert"
 	"github.com/vibhorsharma/geofence-backend/internal/api"
 	"github.com/vibhorsharma/geofence-backend/internal/config"
 	"github.com/vibhorsharma/geofence-backend/internal/db"
@@ -18,6 +19,7 @@ import (
 	"github.com/vibhorsharma/geofence-backend/internal/location"
 	"github.com/vibhorsharma/geofence-backend/internal/vehicle"
 	"github.com/vibhorsharma/geofence-backend/internal/violation"
+	"github.com/vibhorsharma/geofence-backend/internal/ws"
 )
 
 // statusResponseWriter wraps http.ResponseWriter to capture HTTP status codes.
@@ -95,6 +97,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize WebSocket hub for real-time alert broadcasts
+	hub := ws.NewHub(cfg.AllowedOriginsList())
+	go hub.Run()
+	defer hub.Close()
+
 	// Initialize Geofence layer
 	geofenceStore := geofence.NewStore(pool)
 	geofenceService := geofence.NewService(geofenceStore)
@@ -105,10 +112,17 @@ func main() {
 	vehicleService := vehicle.NewService(vehicleStore)
 	vehicleHandler := vehicle.NewHandler(vehicleService)
 
-	// Initialize Location layer with NoopNotifier (ready for real-time WebSocket alert hub in Phase 4/5)
-	notifier := location.NewNoopNotifier()
+	// Initialize Alert layer
+	alertStore := alert.NewStore(pool)
+	alertService := alert.NewService(alertStore)
+	alertHandler := alert.NewHandler(alertService)
+
+	// Initialize Alert Dispatcher (implements location.EventNotifier)
+	dispatcher := alert.NewDispatcher(alertStore, hub)
+
+	// Initialize Location layer wired to the alert Dispatcher
 	locationStore := location.NewStore(pool)
-	locationService := location.NewService(locationStore, notifier)
+	locationService := location.NewService(locationStore, dispatcher)
 	locationHandler := location.NewHandler(locationService)
 
 	// Initialize Violation layer
@@ -123,6 +137,8 @@ func main() {
 		VehicleHandler:   vehicleHandler,
 		LocationHandler:  locationHandler,
 		ViolationHandler: violationHandler,
+		AlertHandler:     alertHandler,
+		WSHub:            hub,
 	})
 
 	// Wrap router with CORS and logging middlewares

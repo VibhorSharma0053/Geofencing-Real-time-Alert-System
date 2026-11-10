@@ -6,11 +6,13 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/vibhorsharma/geofence-backend/internal/alert"
 	"github.com/vibhorsharma/geofence-backend/internal/geofence"
 	"github.com/vibhorsharma/geofence-backend/internal/httpx"
 	"github.com/vibhorsharma/geofence-backend/internal/location"
 	"github.com/vibhorsharma/geofence-backend/internal/vehicle"
 	"github.com/vibhorsharma/geofence-backend/internal/violation"
+	"github.com/vibhorsharma/geofence-backend/internal/ws"
 )
 
 // RouterConfig holds dependencies required to register application routes.
@@ -20,6 +22,8 @@ type RouterConfig struct {
 	VehicleHandler   *vehicle.Handler
 	LocationHandler  *location.Handler
 	ViolationHandler *violation.Handler
+	AlertHandler     *alert.Handler
+	WSHub            *ws.Hub
 }
 
 type methodAndNotFoundInterceptor struct {
@@ -73,7 +77,7 @@ func InterceptStandardHTTPStatus(next http.Handler) http.Handler {
 func NewRouter(cfg RouterConfig) http.Handler {
 	mux := http.NewServeMux()
 
-	// 1. Health check endpoint
+	// 1. Health check endpoint (including DB status and active WebSocket clients count)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		dbStatus := "ok"
@@ -89,9 +93,15 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			dbStatus = "down"
 		}
 
+		wsClients := 0
+		if cfg.WSHub != nil {
+			wsClients = cfg.WSHub.ClientCount()
+		}
+
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{
-			"status": "ok",
-			"db":     dbStatus,
+			"status":     "ok",
+			"db":         dbStatus,
+			"ws_clients": wsClients,
 		}, start)
 	})
 
@@ -118,7 +128,19 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		mux.HandleFunc("GET /violations/history", cfg.ViolationHandler.GetHistory)
 	}
 
-	// 6. Catch-all for unknown routes
+	// 6. Alert rule endpoints (POST /alerts/configure, GET /alerts, DELETE /alerts/{alert_id})
+	if cfg.AlertHandler != nil {
+		mux.HandleFunc("POST /alerts/configure", cfg.AlertHandler.Configure)
+		mux.HandleFunc("GET /alerts", cfg.AlertHandler.List)
+		mux.HandleFunc("DELETE /alerts/{alert_id}", cfg.AlertHandler.Delete)
+	}
+
+	// 7. WebSocket alerts endpoint (GET /ws/alerts)
+	if cfg.WSHub != nil {
+		mux.HandleFunc("GET /ws/alerts", cfg.WSHub.ServeWS)
+	}
+
+	// 8. Catch-all for unknown routes
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		httpx.WriteError(w, http.StatusNotFound, "route not found", start)
