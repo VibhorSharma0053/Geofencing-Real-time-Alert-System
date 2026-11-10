@@ -1,0 +1,53 @@
+@import 'leaflet/dist/leaflet.css';
+@import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom body defaults */
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #020617; /* slate-950 */
+}
+
+/* Custom scrollbar for alerts and tables */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Fix Leaflet pane clipping & z-index stacking */
+.leaflet-container {
+  font-family: inherit;
+  background-color: #0b0f19;
+}
+
+/* Geoman Toolbar Dark Theme Integration */
+.leaflet-pm-toolbar .leaflet-buttons-control-button {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+.leaflet-pm-toolbar .leaflet-buttons-control-button:hover {
+  background-color: #334155 !important;
+}
