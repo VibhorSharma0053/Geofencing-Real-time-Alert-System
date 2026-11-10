@@ -18,7 +18,7 @@ A high-performance full-stack geofencing and real-time fleet monitoring system b
 ## Project Status Checklist
 
 - [x] **Phase 0: Repository Skeleton & Architecture Specification**
-- [ ] **Phase 1: Database Schema & PostGIS Migrations (pgxpool + golang-migrate)**
+- [x] **Phase 1: Database Schema & PostGIS Migrations (pgxpool + golang-migrate)**
 - [ ] **Phase 2: Domain Models & Storage Layer Implementation**
 - [ ] **Phase 3: Core Geofencing Engine & Event Detection Logic**
 - [ ] **Phase 4: REST API Endpoints (Geofences, Vehicles, Locations, Alerts, Violations)**
