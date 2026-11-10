@@ -15,7 +15,9 @@ import (
 	"github.com/vibhorsharma/geofence-backend/internal/config"
 	"github.com/vibhorsharma/geofence-backend/internal/db"
 	"github.com/vibhorsharma/geofence-backend/internal/geofence"
+	"github.com/vibhorsharma/geofence-backend/internal/location"
 	"github.com/vibhorsharma/geofence-backend/internal/vehicle"
+	"github.com/vibhorsharma/geofence-backend/internal/violation"
 )
 
 // statusResponseWriter wraps http.ResponseWriter to capture HTTP status codes.
@@ -103,11 +105,24 @@ func main() {
 	vehicleService := vehicle.NewService(vehicleStore)
 	vehicleHandler := vehicle.NewHandler(vehicleService)
 
+	// Initialize Location layer with NoopNotifier (ready for real-time WebSocket alert hub in Phase 4/5)
+	notifier := location.NewNoopNotifier()
+	locationStore := location.NewStore(pool)
+	locationService := location.NewService(locationStore, notifier)
+	locationHandler := location.NewHandler(locationService)
+
+	// Initialize Violation layer
+	violationStore := violation.NewStore(pool)
+	violationService := violation.NewService(violationStore)
+	violationHandler := violation.NewHandler(violationService)
+
 	// Build router with Go 1.22+ ServeMux patterns
 	router := api.NewRouter(api.RouterConfig{
-		Pool:            pool,
-		GeofenceHandler: geofenceHandler,
-		VehicleHandler:  vehicleHandler,
+		Pool:             pool,
+		GeofenceHandler:  geofenceHandler,
+		VehicleHandler:   vehicleHandler,
+		LocationHandler:  locationHandler,
+		ViolationHandler: violationHandler,
 	})
 
 	// Wrap router with CORS and logging middlewares

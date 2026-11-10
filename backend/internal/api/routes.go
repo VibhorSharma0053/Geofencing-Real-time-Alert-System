@@ -8,14 +8,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vibhorsharma/geofence-backend/internal/geofence"
 	"github.com/vibhorsharma/geofence-backend/internal/httpx"
+	"github.com/vibhorsharma/geofence-backend/internal/location"
 	"github.com/vibhorsharma/geofence-backend/internal/vehicle"
+	"github.com/vibhorsharma/geofence-backend/internal/violation"
 )
 
 // RouterConfig holds dependencies required to register application routes.
 type RouterConfig struct {
-	Pool            *pgxpool.Pool
-	GeofenceHandler *geofence.Handler
-	VehicleHandler  *vehicle.Handler
+	Pool             *pgxpool.Pool
+	GeofenceHandler  *geofence.Handler
+	VehicleHandler   *vehicle.Handler
+	LocationHandler  *location.Handler
+	ViolationHandler *violation.Handler
 }
 
 type methodAndNotFoundInterceptor struct {
@@ -103,7 +107,18 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		mux.HandleFunc("GET /vehicles", cfg.VehicleHandler.List)
 	}
 
-	// 4. Catch-all for unknown routes
+	// 4. Vehicle location endpoints (POST /vehicles/location, GET /vehicles/location/{vehicle_id})
+	if cfg.LocationHandler != nil {
+		mux.HandleFunc("POST /vehicles/location", cfg.LocationHandler.PostLocation)
+		mux.HandleFunc("GET /vehicles/location/{vehicle_id}", cfg.LocationHandler.GetLocation)
+	}
+
+	// 5. Violation history endpoint (GET /violations/history)
+	if cfg.ViolationHandler != nil {
+		mux.HandleFunc("GET /violations/history", cfg.ViolationHandler.GetHistory)
+	}
+
+	// 6. Catch-all for unknown routes
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		httpx.WriteError(w, http.StatusNotFound, "route not found", start)

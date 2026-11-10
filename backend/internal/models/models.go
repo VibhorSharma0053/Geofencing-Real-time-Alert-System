@@ -168,3 +168,53 @@ type CreateVehicleResponse struct {
 type ListVehiclesResponse struct {
 	Vehicles []Vehicle `json:"vehicles"`
 }
+
+// PostLocationRequest defines payload for POST /vehicles/location.
+type PostLocationRequest struct {
+	VehicleID string   `json:"vehicle_id"`
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
+	Timestamp string   `json:"timestamp"`
+}
+
+// CurrentGeofenceStatus defines a geofence with inside status in POST /vehicles/location.
+type CurrentGeofenceStatus struct {
+	GeofenceID   string `json:"geofence_id"`
+	GeofenceName string `json:"geofence_name"`
+	Status       string `json:"status"` // "inside"
+}
+
+// PostLocationResponse defines response for POST /vehicles/location.
+type PostLocationResponse struct {
+	VehicleID        string                  `json:"vehicle_id"`
+	LocationUpdated  bool                    `json:"location_updated"`
+	CurrentGeofences []CurrentGeofenceStatus `json:"current_geofences"`
+}
+
+// CurrentLocationInfo defines coordinates and timestamp in GET /vehicles/location/{vehicle_id}.
+type CurrentLocationInfo struct {
+	Latitude  float64   `json:"latitude"`
+	Longitude float64   `json:"longitude"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// VehicleGeofenceDetail defines a geofence with category in GET /vehicles/location/{vehicle_id}.
+type VehicleGeofenceDetail struct {
+	GeofenceID   string `json:"geofence_id"`
+	GeofenceName string `json:"geofence_name"`
+	Category     string `json:"category"`
+}
+
+// GetVehicleLocationResponse defines response for GET /vehicles/location/{vehicle_id}.
+type GetVehicleLocationResponse struct {
+	VehicleID        string                  `json:"vehicle_id"`
+	VehicleNumber    string                  `json:"vehicle_number"`
+	CurrentLocation  *CurrentLocationInfo    `json:"current_location"`
+	CurrentGeofences []VehicleGeofenceDetail `json:"current_geofences"`
+}
+
+// ListViolationsResponse defines response for GET /violations/history.
+type ListViolationsResponse struct {
+	Violations []ViolationEvent `json:"violations"`
+	TotalCount int64            `json:"total_count"`
+}
