@@ -1,0 +1,92 @@
+### Variables
+@baseUrl = http://localhost:8080
+@apiKey = 
+
+### 1. Health Probe
+GET {{baseUrl}}/health
+Content-Type: application/json
+
+### 2. Create Geofence (Delivery Zone)
+# @name createGeofence
+POST {{baseUrl}}/geofences
+Content-Type: application/json
+
+{
+  "name": "Market Street Delivery Hub",
+  "category": "delivery_zone",
+  "description": "High-density retail delivery perimeter",
+  "coordinates": [
+    [37.7749, -122.4194],
+    [37.7849, -122.4194],
+    [37.7849, -122.4094],
+    [37.7749, -122.4094],
+    [37.7749, -122.4194]
+  ]
+}
+
+### Store Geofence ID
+@geofenceId = {{createGeofence.response.body.geofence_id}}
+
+### 3. List Geofences
+GET {{baseUrl}}/geofences?category=delivery_zone
+Content-Type: application/json
+
+### 4. Register Vehicle
+# @name createVehicle
+POST {{baseUrl}}/vehicles
+Content-Type: application/json
+
+{
+  "vehicle_number": "TRK-HTTP-99",
+  "driver_name": "Taylor Hayes",
+  "vehicle_type": "truck",
+  "phone": "+1 415-555-0199"
+}
+
+### Store Vehicle ID
+@vehicleId = {{createVehicle.response.body.vehicle_id}}
+
+### 5. List Vehicles
+GET {{baseUrl}}/vehicles
+Content-Type: application/json
+
+### 6. Configure Alert Rule
+# @name createAlert
+POST {{baseUrl}}/alerts/configure
+Content-Type: application/json
+
+{
+  "geofence_id": "{{geofenceId}}",
+  "vehicle_id": "{{vehicleId}}",
+  "event_type": "both"
+}
+
+### Store Alert ID
+@alertId = {{createAlert.response.body.alert_id}}
+
+### 7. List Configured Alert Rules
+GET {{baseUrl}}/alerts?geofence_id={{geofenceId}}
+Content-Type: application/json
+
+### 8. Transmit Vehicle Location (Inside Geofence)
+POST {{baseUrl}}/vehicles/location
+Content-Type: application/json
+
+{
+  "vehicle_id": "{{vehicleId}}",
+  "latitude": 37.7780,
+  "longitude": -122.4140,
+  "timestamp": "2026-11-13T12:00:00Z"
+}
+
+### 9. Get Current Vehicle Location
+GET {{baseUrl}}/vehicles/location/{{vehicleId}}
+Content-Type: application/json
+
+### 10. Query Violation History (with limit & offset)
+GET {{baseUrl}}/violations/history?limit=25&offset=0
+Content-Type: application/json
+
+### 11. Delete Configured Alert Rule
+DELETE {{baseUrl}}/alerts/{{alertId}}
+Content-Type: application/json

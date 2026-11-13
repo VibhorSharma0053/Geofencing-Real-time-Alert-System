@@ -1,0 +1,303 @@
+{
+  "info": {
+    "_postman_id": "b1a2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d",
+    "name": "Geofencing & Real-Time Alert System API",
+    "description": "Full-stack Geofencing and Real-Time Alert API test suite. Covers geofence creation, vehicle registry, telemetry updates, alert rule configuration, violation history, and health probes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "geofence_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "vehicle_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "alert_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Probe",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', function() { pm.response.to.have.status(200); });",
+              "pm.test('Response includes time_ns as string', function() {",
+              "  var json = pm.response.json();",
+              "  pm.expect(json).to.have.property('time_ns');",
+              "  pm.expect(typeof json.time_ns).to.eql('string');",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  pm.expect(json.db).to.eql('ok');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Geofence",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Downtown Delivery Hub\",\n  \"category\": \"delivery_zone\",\n  \"description\": \"High priority delivery perimeter\",\n  \"coordinates\": [\n    [37.7749, -122.4194],\n    [37.7849, -122.4194],\n    [37.7849, -122.4094],\n    [37.7749, -122.4094],\n    [37.7749, -122.4194]\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/geofences",
+          "host": ["{{base_url}}"],
+          "path": ["geofences"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 201', function() { pm.response.to.have.status(201); });",
+              "var json = pm.response.json();",
+              "pm.expect(json).to.have.property('time_ns');",
+              "pm.expect(json.geofence_id).to.match(/^geo_/);",
+              "pm.collectionVariables.set('geofence_id', json.geofence_id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Geofences",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/geofences?category=delivery_zone",
+          "host": ["{{base_url}}"],
+          "path": ["geofences"],
+          "query": [
+            { "key": "category", "value": "delivery_zone" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', function() { pm.response.to.have.status(200); });",
+              "var json = pm.response.json();",
+              "pm.expect(json).to.have.property('geofences');",
+              "pm.expect(json).to.have.property('time_ns');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register Vehicle",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"vehicle_number\": \"TRK-{{$randomInt}}\",\n  \"driver_name\": \"Jordan Vance\",\n  \"vehicle_type\": \"truck\",\n  \"phone\": \"+1 555-019-2834\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/vehicles",
+          "host": ["{{base_url}}"],
+          "path": ["vehicles"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 201', function() { pm.response.to.have.status(201); });",
+              "var json = pm.response.json();",
+              "pm.expect(json.vehicle_id).to.match(/^veh_/);",
+              "pm.collectionVariables.set('vehicle_id', json.vehicle_id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Vehicles",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/vehicles",
+          "host": ["{{base_url}}"],
+          "path": ["vehicles"]
+        }
+      }
+    },
+    {
+      "name": "Configure Alert Rule",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"geofence_id\": \"{{geofence_id}}\",\n  \"vehicle_id\": \"{{vehicle_id}}\",\n  \"event_type\": \"both\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/alerts/configure",
+          "host": ["{{base_url}}"],
+          "path": ["alerts", "configure"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 201', function() { pm.response.to.have.status(201); });",
+              "var json = pm.response.json();",
+              "pm.expect(json.alert_id).to.match(/^alert_/);",
+              "pm.collectionVariables.set('alert_id', json.alert_id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Alert Rules",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/alerts?geofence_id={{geofence_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["alerts"],
+          "query": [
+            { "key": "geofence_id", "value": "{{geofence_id}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete Alert Rule",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/alerts/{{alert_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["alerts", "{{alert_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Transmit Vehicle Location",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"vehicle_id\": \"{{vehicle_id}}\",\n  \"latitude\": 37.7780,\n  \"longitude\": -122.4140,\n  \"timestamp\": \"{{$isoTimestamp}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/vehicles/location",
+          "host": ["{{base_url}}"],
+          "path": ["vehicles", "location"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', function() { pm.response.to.have.status(200); });",
+              "var json = pm.response.json();",
+              "pm.expect(json.location_updated).to.eql(true);",
+              "pm.expect(json).to.have.property('current_geofences');",
+              "pm.expect(json).to.have.property('time_ns');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Current Vehicle Location",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/vehicles/location/{{vehicle_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["vehicles", "location", "{{vehicle_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Get Violations History",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/violations/history?limit=25&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["violations", "history"],
+          "query": [
+            { "key": "limit", "value": "25" },
+            { "key": "offset", "value": "0" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', function() { pm.response.to.have.status(200); });",
+              "var json = pm.response.json();",
+              "pm.expect(json).to.have.property('violations');",
+              "pm.expect(json).to.have.property('total_count');",
+              "pm.expect(json).to.have.property('time_ns');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ]
+}
