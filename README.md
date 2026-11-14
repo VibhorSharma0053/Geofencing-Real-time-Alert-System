@@ -32,7 +32,7 @@ A high-performance, full-stack fleet geofencing and real-time alert monitoring p
 │                           [ SCREENSHOT PLACEHOLDER ]                        │
 │                                                                             │
 │                     Interactive Leaflet Map & Live Fleet                    │
-│      - Real-Time Fleet Markers with Restricted Zone Pulsing Alerts         │
+│      - Real-Time Fleet Markers with Restricted Zone Pulsing Alerts          │
 │      - Geoman Polygon Geofence Drawing Canvas                               │
 │      - Real-Time WebSocket Alerts Feed with Slide-Out Panel                 │
 │      - Bi-Directional Click-to-Set Coordinate Telemetry Updates             │
